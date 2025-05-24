@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: whatsapp-lounge-app
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn run:app
+    autoDeploy: true
+    envVars:
+      - key: ACCESS_TOKEN
+        sync: false
+      - key: VERSION
+        sync: false
+      - key: PHONE_NUMBER_ID
+        sync: false
+      - key: FIREBASE_CREDENTIALS
+        sync: false
+
