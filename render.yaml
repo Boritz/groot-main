@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: whatsapp-lounge-app
+    name: groot
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
