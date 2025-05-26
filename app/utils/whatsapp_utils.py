@@ -235,36 +235,6 @@ def generate_response(message_body, wa_id=None, name=None):
     else:
         session_context[wa_id] = {"step": "ask_name", "visitor_info": {}}
         return "Let's start over. Enter visitor name:"
-
-# Add a new endpoint to verify codes
-@app.route('/verify_code', methods=["POST"])
-def verify_code():
-    data = request.json
-    code = data.get("code")
-    
-    if not code:
-        return jsonify({"valid": False, "message": "No code provided"}), 400
-    
-    if code not in active_codes:
-        return jsonify({"valid": False, "message": "Invalid or expired code"}), 404
-    
-    code_data = active_codes[code]
-    
-    if code_data["used"]:
-        return jsonify({"valid": False, "message": "Code already used"}), 403
-    
-    if datetime.now() > code_data["expiry"]:
-        return jsonify({"valid": False, "message": "Code expired"}), 403
-    
-    # Mark code as used
-    active_codes[code]["used"] = True
-    
-    return jsonify({
-        "valid": True,
-        "message": "Access granted",
-        "visitor_name": code_data["name"],
-        "visit_date": code_data["date"]
-    })
     
 def generate_qr_code_base64(data, visitor_name):
     save_dir = 'qr_codes'
