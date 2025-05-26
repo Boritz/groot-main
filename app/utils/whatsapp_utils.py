@@ -144,10 +144,20 @@ def generate_response(message_body, wa_id=None, name=None):
 
     if wa_id not in session_context:
         if wa_id in user_pins:
-            session_context[wa_id] = {"step": "ask_name", "visitor_info": {}}
+            # Returning user - start with visitor name
+            session_context[wa_id] = {
+                "step": "ask_visitor_name", 
+                "visitor_info": {},
+                "is_returning_user": True  # Mark as returning user
+            }
             return "Welcome back to Groot Estate Management!\nPlease enter visitor name:"
         else:
-            session_context[wa_id] = {"step": "set_pin", "visitor_info": {}}
+            # New user - start with PIN setup
+            session_context[wa_id] = {
+                "step": "set_pin", 
+                "visitor_info": {}, 
+                "is_new_user": True
+            }
             return (
                 "Welcome to Groot Estate Management!\n"
                 "Please set a 4-digit PIN for your bookings:"
@@ -161,36 +171,33 @@ def generate_response(message_body, wa_id=None, name=None):
         if validate_pin(message_body):
             user_pins[wa_id] = message_body
             user_session["step"] = "confirm_pin"
-            session_context[wa_id] = user_session
             return "Please confirm your 4-digit PIN:"
         else:
             return "Invalid PIN. Please enter exactly 4 digits."
 
     elif step == "confirm_pin":
         if message_body == user_pins.get(wa_id):
-            user_session["step"] = "ask_resident_name"
-            session_context[wa_id] = user_session
-            return "PIN set successfully!\nPlease enter your name:"
+            if user_session.get("is_new_user"):
+                user_session["step"] = "ask_resident_name"
+                user_session["resident_info"] = {}
+                return "PIN set successfully!\nPlease enter your name (resident):"
+            else:
+                user_session["step"] = "ask_visitor_name"
+                return "PIN verified!\nPlease enter visitor name:"
         else:
             return "PINs don't match. Please enter a new 4-digit PIN:"
 
     elif step == "ask_resident_name":
-        if "resident_info" not in user_session:
-            user_session["resident_info"] = {}
         user_session["resident_info"]["name"] = message_body
         user_session["step"] = "ask_house_number"
         return "Please enter your house number:"
 
     elif step == "ask_house_number":
-        if not message_body:
-            return "House number cannot be empty. Please enter your house number:"
         user_session["resident_info"]["house_number"] = message_body
         user_session["step"] = "ask_street_name"
         return "Please enter your street name:"
 
     elif step == "ask_street_name":
-        if not message_body:
-            return "Street name cannot be empty. Please enter your street name:"
         # Save resident info permanently
         resident_info[wa_id] = {
             "name": user_session["resident_info"]["name"],
@@ -203,7 +210,6 @@ def generate_response(message_body, wa_id=None, name=None):
     elif step == "ask_visitor_name":
         user_session["visitor_info"]["name"] = message_body
         user_session["step"] = "ask_date"
-        session_context[wa_id] = user_session
         return (
             "Select visit date:\n"
             "1. Today\n"
@@ -238,7 +244,6 @@ def generate_response(message_body, wa_id=None, name=None):
 
         user_session["visitor_info"]["date"] = selected_date
         user_session["step"] = "verify_pin"
-        session_context[wa_id] = user_session
         return "Enter your 4-digit PIN to confirm booking:"
 
     elif step == "verify_pin":
@@ -262,8 +267,12 @@ def generate_response(message_body, wa_id=None, name=None):
             qr_data = f"Groot Estate Pass\nName: {visitor_info['name']}\nDate: {visitor_info['date']}\nCode: {random_code}\nExpires: {expiry_time.strftime('%Y-%m-%d %H:%M')}"
             qr_image_b64, _ = generate_qr_code_base64(qr_data, visitor_info['name'])
             
-                        
-            session_context.pop(wa_id, None)
+            # Instead of popping the session, mark as returning user
+            session_context[wa_id] = {
+                "step": "ask_visitor_name",
+                "visitor_info": {},
+                "is_returning_user": True
+            }
             
             return (
                 f"✅ Booking confirmed!\n"
@@ -277,8 +286,13 @@ def generate_response(message_body, wa_id=None, name=None):
             return "❌ Incorrect PIN. Try again or type 'RESET' to start over."
 
     else:
-        session_context[wa_id] = {"step": "ask_name", "visitor_info": {}}
-        return "Let's start over. Enter visitor name:"
+        # If we get here, something unexpected happened - start fresh but keep user as returning
+        session_context[wa_id] = {
+            "step": "ask_visitor_name",
+            "visitor_info": {},
+            "is_returning_user": True
+        }
+        return "Let's start over. Please enter visitor name:"
     
 def generate_qr_code_base64(data, visitor_name):
     save_dir = 'qr_codes'
