@@ -16,8 +16,9 @@ app.config["ACCESS_TOKEN"] = os.getenv("ACCESS_TOKEN")
 app.config["VERSION"] = "v22.0"
 app.config["PHONE_NUMBER_ID"] = os.getenv("PHONE_NUMBER_ID")
 
-# In-memory storage for user PINs (replace with database in production)
+# In-memory storage (replace with database in production)
 user_pins = {}
+active_codes = {}  # Stores active codes and their expiration times
 
 # In-memory session (replace with Redis/db in prod)
 session_context = {}
@@ -56,11 +57,30 @@ def validate_pin(pin):
     """Validate that PIN is 4 digits"""
     return pin.isdigit() and len(pin) == 4
 
+def get_midnight_expiry():
+    """Get expiration time at midnight tonight"""
+    now = datetime.now()
+    midnight = datetime.combine(now.date() + timedelta(days=1), datetime.min.time())
+    return midnight
+
+def is_code_valid(code):
+    """Check if code exists and hasn't expired"""
+    if code not in active_codes:
+        return False
+    
+    expiry_time = active_codes[code]["expiry"]
+    return datetime.now() < expiry_time
+
 def generate_response(message_body, wa_id=None, name=None):
-    global session_context, user_pins
+    global session_context, user_pins, active_codes
+
+    # Clean up expired codes first
+    current_time = datetime.now()
+    expired_codes = [code for code, data in active_codes.items() if data["expiry"] <= current_time]
+    for code in expired_codes:
+        del active_codes[code]
 
     if wa_id not in session_context:
-        # Check if user has a PIN set
         if wa_id in user_pins:
             session_context[wa_id] = {"step": "ask_name", "visitor_info": {}}
             return "Welcome back to Groot Estate Management!\nPlease enter the visitor's name:"
@@ -89,10 +109,7 @@ def generate_response(message_body, wa_id=None, name=None):
         if message_body == user_pins.get(wa_id):
             user_session["step"] = "ask_name"
             session_context[wa_id] = user_session
-            return (
-                "PIN set successfully!\n\n"
-                "Please enter the visitor's name:"
-            )
+            return "PIN set successfully!\n\nPlease enter the visitor's name:"
         else:
             return "PINs don't match. Please start over by entering a new 4-digit PIN:"
 
@@ -143,9 +160,20 @@ def generate_response(message_body, wa_id=None, name=None):
             
             # Generate random access code
             random_code = generate_random_code()
+            expiry_time = get_midnight_expiry()
+            
+            # Store the active code with expiry time
+            active_codes[random_code] = {
+                "wa_id": wa_id,
+                "name": visitor_info["name"],
+                "date": visitor_info["date"],
+                "expiry": expiry_time,
+                "used": False
+            }
+            
             visitor_info["code"] = random_code
             
-            qr_data = f"Name: {visitor_info['name']}\nDate: {visitor_info['date']}\nAccess Code: {random_code}"
+            qr_data = f"Name: {visitor_info['name']}\nDate: {visitor_info['date']}\nAccess Code: {random_code}\nExpires: {expiry_time.strftime('%Y-%m-%d %H:%M')}"
             qr_image_b64, qr_file_path = generate_qr_code_base64(qr_data, visitor_info['name'])
             logging.info(f"QR Code generated and saved at: {qr_file_path}")
 
@@ -158,8 +186,10 @@ def generate_response(message_body, wa_id=None, name=None):
                 f"✅ Booking confirmed!\n\n"
                 f"Visitor Name: {visitor_info['name']}\n"
                 f"Visit Date: {visitor_info['date']}\n"
-                f"Access Code: {random_code}\n\n"
-                f"The QR code has been sent to you."
+                f"Access Code: {random_code}\n"
+                f"Expires: {expiry_time.strftime('%Y-%m-%d %H:%M')}\n\n"
+                f"The QR code has been sent to you.\n"
+                f"This code will expire at midnight and can only be used once."
             )
         else:
             return "❌ Incorrect PIN. Please try again or type 'RESET' to start over."
@@ -168,6 +198,36 @@ def generate_response(message_body, wa_id=None, name=None):
         session_context[wa_id] = {"step": "ask_name", "visitor_info": {}}
         return "Let's start over. Please enter the visitor's name:"
 
+# Add a new endpoint to verify codes
+@app.route('/verify_code', methods=["POST"])
+def verify_code():
+    data = request.json
+    code = data.get("code")
+    
+    if not code:
+        return jsonify({"valid": False, "message": "No code provided"}), 400
+    
+    if code not in active_codes:
+        return jsonify({"valid": False, "message": "Invalid or expired code"}), 404
+    
+    code_data = active_codes[code]
+    
+    if code_data["used"]:
+        return jsonify({"valid": False, "message": "Code already used"}), 403
+    
+    if datetime.now() > code_data["expiry"]:
+        return jsonify({"valid": False, "message": "Code expired"}), 403
+    
+    # Mark code as used
+    active_codes[code]["used"] = True
+    
+    return jsonify({
+        "valid": True,
+        "message": "Access granted",
+        "visitor_name": code_data["name"],
+        "visit_date": code_data["date"]
+    })
+    
 def generate_qr_code_base64(data, visitor_name):
     save_dir = 'qr_codes'
     os.makedirs(save_dir, exist_ok=True)
