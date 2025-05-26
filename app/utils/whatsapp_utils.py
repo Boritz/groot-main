@@ -168,25 +168,25 @@ def generate_response(message_body, wa_id=None, name=None):
 
     elif step == "confirm_pin":
         if message_body == user_pins.get(wa_id):
-            user_session["step"] = "ask_name"
+            user_session["step"] = "ask_resident_name"
             session_context[wa_id] = user_session
-            return "PIN set successfully!\nPlease enter your name (for future reference):"
+            return "PIN set successfully!\nPlease enter your name:"
         else:
             return "PINs don't match. Please enter a new 4-digit PIN:"
 
-    elif step == "ask_name":
-        user_session["visitor_info"]["resident_name"] = message_body
+    elif step == "ask_resident_name":
+        if "resident_info" not in user_session:
+            user_session["resident_info"] = {}
+        user_session["resident_info"]["name"] = message_body
         user_session["step"] = "ask_house_number"
-        session_context[wa_id] = user_session
-        return "Please enter your house number (for future reference):"
+        return "Please enter your house number:"
 
     elif step == "ask_house_number":
         if not message_body:
             return "House number cannot be empty. Please enter your house number:"
-        user_session["visitor_info"]["house_number"] = message_body
+        user_session["resident_info"]["house_number"] = message_body
         user_session["step"] = "ask_street_name"
-        session_context[wa_id] = user_session
-        return "Please enter your street name (for future reference):"
+        return "Please enter your street name:"
 
     elif step == "ask_street_name":
         if not message_body:
