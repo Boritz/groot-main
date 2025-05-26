@@ -15,13 +15,40 @@ app = Flask(__name__)
 app.config["ACCESS_TOKEN"] = os.getenv("ACCESS_TOKEN")
 app.config["VERSION"] = "v22.0"
 app.config["PHONE_NUMBER_ID"] = os.getenv("PHONE_NUMBER_ID")
+app.config["ADMIN_NUMBER"] = os.getenv("ADMIN_NUMBER")  # Admin's WhatsApp number
 
 # In-memory storage (replace with database in production)
 user_pins = {}
-active_codes = {}  # Stores active codes and their expiration times
+active_codes = {}  # {code: {wa_id, name, date, expiry, used, verified_at}}
 
 # In-memory session (replace with Redis/db in prod)
 session_context = {}
+
+def notify_admin(message):
+    """Send notification to admin WhatsApp number"""
+    if not app.config["ADMIN_NUMBER"]:
+        logging.warning("No ADMIN_NUMBER configured, skipping admin notification")
+        return
+    
+    headers = {
+        "Content-type": "application/json",
+        "Authorization": f"Bearer {app.config['ACCESS_TOKEN']}",
+    }
+
+    url = f"https://graph.facebook.com/{app.config['VERSION']}/{app.config['PHONE_NUMBER_ID']}/messages"
+    
+    data = {
+        "messaging_product": "whatsapp",
+        "to": app.config["ADMIN_NUMBER"],
+        "type": "text",
+        "text": {"body": message}
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        logging.info(f"Admin notification sent: {response.status_code}")
+    except Exception as e:
+        logging.error(f"Failed to send admin notification: {e}")
 
 @app.route('/webhook', methods=["POST"])
 def webhook():
@@ -30,66 +57,72 @@ def webhook():
         process_whatsapp_message(body)
     return "ok", 200
 
-@app.route('/verify')
-def verify_qr():
-    return render_template("verify.html")
-
-def log_http_response(response):
-    logging.info(f"Status: {response.status_code}")
-    logging.info(f"Content-type: {response.headers.get('content-type')}")
-    logging.info(f"Body: {response.text}")
-
-def get_text_message_input(recipient, text):
-    return json.dumps({
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": recipient,
-        "type": "text",
-        "text": {"preview_url": False, "body": text},
-    })
-
-def generate_random_code(length=6):
-    """Generate a random alphanumeric code of specified length"""
-    characters = string.ascii_uppercase + string.digits
-    return ''.join(random.choice(characters) for _ in range(length))
-
-def validate_pin(pin):
-    """Validate that PIN is 4 digits"""
-    return pin.isdigit() and len(pin) == 4
-
-def get_midnight_expiry():
-    """Get expiration time at midnight tonight"""
-    now = datetime.now()
-    midnight = datetime.combine(now.date() + timedelta(days=1), datetime.min.time())
-    return midnight
-
-def is_code_valid(code):
-    """Check if code exists and hasn't expired"""
-    if code not in active_codes:
-        return False
+@app.route('/verify_code', methods=["POST"])
+def verify_code():
+    """Endpoint for security to verify codes"""
+    data = request.json
+    code = data.get("code", "").strip().upper()
     
-    expiry_time = active_codes[code]["expiry"]
-    return datetime.now() < expiry_time
+    if not code:
+        return jsonify({"valid": False, "message": "No code provided"}), 400
+    
+    if code not in active_codes:
+        notify_admin(f"❌ Invalid code attempt: {code}")
+        return jsonify({"valid": False, "message": "Invalid code"}), 404
+    
+    code_data = active_codes[code]
+    now = datetime.now()
+    
+    if code_data["used"]:
+        notify_admin(f"⚠️ Already used code: {code}\nVisitor: {code_data['name']}\nDate: {code_data['date']}")
+        return jsonify({"valid": False, "message": "Code already used"}), 403
+    
+    if now > code_data["expiry"]:
+        notify_admin(f"⌛ Expired code: {code}\nVisitor: {code_data['name']}\nDate: {code_data['date']}")
+        return jsonify({"valid": False, "message": "Code expired"}), 403
+    
+    # Mark code as used and record verification time
+    active_codes[code]["used"] = True
+    active_codes[code]["verified_at"] = now.strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Notify admin of successful verification
+    notify_admin(
+        f"✅ Access granted\n"
+        f"Code: {code}\n"
+        f"Visitor: {code_data['name']}\n"
+        f"Date: {code_data['date']}\n"
+        f"Verified at: {now.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+    
+    return jsonify({
+        "valid": True,
+        "message": "Access granted",
+        "visitor": {
+            "name": code_data["name"],
+            "date": code_data["date"],
+            "code": code,
+            "expiry": code_data["expiry"].strftime("%Y-%m-%d %H:%M")
+        }
+    })
 
 def generate_response(message_body, wa_id=None, name=None):
     global session_context, user_pins, active_codes
 
     # Clean up expired codes first
     current_time = datetime.now()
-    expired_codes = [code for code, data in active_codes.items() if data["expiry"] <= current_time]
-    for code in expired_codes:
-        del active_codes[code]
+    for code in list(active_codes.keys()):
+        if active_codes[code]["expiry"] <= current_time:
+            del active_codes[code]
 
     if wa_id not in session_context:
         if wa_id in user_pins:
             session_context[wa_id] = {"step": "ask_name", "visitor_info": {}}
-            return "Welcome back to Groot Estate Management!\nPlease enter the visitor's name:"
+            return "Welcome back to Groot Estate Management!\nPlease enter visitor name:"
         else:
             session_context[wa_id] = {"step": "set_pin", "visitor_info": {}}
             return (
                 "Welcome to Groot Estate Management!\n"
-                "To get started, please set a 4-digit PIN for your bookings.\n"
-                "This PIN will be required for future bookings."
+                "Please set a 4-digit PIN for your bookings:"
             )
 
     user_session = session_context[wa_id]
@@ -101,7 +134,7 @@ def generate_response(message_body, wa_id=None, name=None):
             user_pins[wa_id] = message_body
             user_session["step"] = "confirm_pin"
             session_context[wa_id] = user_session
-            return "Please confirm your 4-digit PIN by entering it again:"
+            return "Please confirm your 4-digit PIN:"
         else:
             return "Invalid PIN. Please enter exactly 4 digits."
 
@@ -109,19 +142,19 @@ def generate_response(message_body, wa_id=None, name=None):
         if message_body == user_pins.get(wa_id):
             user_session["step"] = "ask_name"
             session_context[wa_id] = user_session
-            return "PIN set successfully!\n\nPlease enter the visitor's name:"
+            return "PIN set successfully!\nPlease enter visitor name:"
         else:
-            return "PINs don't match. Please start over by entering a new 4-digit PIN:"
+            return "PINs don't match. Please enter a new 4-digit PIN:"
 
     elif step == "ask_name":
         user_session["visitor_info"]["name"] = message_body
         user_session["step"] = "ask_date"
         session_context[wa_id] = user_session
         return (
-            "Please select the date of visit:\n"
+            "Select visit date:\n"
             "1. Today\n"
             "2. Tomorrow\n"
-            "3. Specify a date (in the format YYYY-MM-DD)"
+            "3. Specify date (YYYY-MM-DD)"
         )
 
     elif step == "ask_date":
@@ -137,66 +170,71 @@ def generate_response(message_body, wa_id=None, name=None):
                 date_str = message_body.split("3")[-1].strip() if message_body.startswith("3") else message_body
                 input_date = datetime.strptime(date_str, "%Y-%m-%d").date()
                 if input_date < today:
-                    return "The date cannot be in the past. Please enter a valid future date (YYYY-MM-DD)."
+                    return "Date cannot be in past. Enter valid date (YYYY-MM-DD)."
                 selected_date = input_date.strftime("%Y-%m-%d")
             except ValueError:
-                return "Invalid date format. Please enter the date in YYYY-MM-DD format."
+                return "Invalid date format. Use YYYY-MM-DD."
         else:
             return (
-                "Invalid input. Please select the date of visit:\n"
+                "Invalid input. Select date:\n"
                 "1. Today\n"
                 "2. Tomorrow\n"
-                "3. Specify a date (in the format YYYY-MM-DD)"
+                "3. Specify date (YYYY-MM-DD)"
             )
 
         user_session["visitor_info"]["date"] = selected_date
         user_session["step"] = "verify_pin"
         session_context[wa_id] = user_session
-        return "Please enter your 4-digit PIN to confirm the booking:"
+        return "Enter your 4-digit PIN to confirm booking:"
 
     elif step == "verify_pin":
         if message_body == user_pins.get(wa_id):
             visitor_info = user_session["visitor_info"]
-            
-            # Generate random access code
             random_code = generate_random_code()
-            expiry_time = get_midnight_expiry()
+            expiry_time = datetime.combine(
+                datetime.now().date() + timedelta(days=1),
+                datetime.min.time()
+            )
             
-            # Store the active code with expiry time
             active_codes[random_code] = {
                 "wa_id": wa_id,
                 "name": visitor_info["name"],
                 "date": visitor_info["date"],
                 "expiry": expiry_time,
-                "used": False
+                "used": False,
+                "verified_at": None
             }
             
-            visitor_info["code"] = random_code
+            qr_data = f"Groot Estate Pass\nName: {visitor_info['name']}\nDate: {visitor_info['date']}\nCode: {random_code}\nExpires: {expiry_time.strftime('%Y-%m-%d %H:%M')}"
+            qr_image_b64, _ = generate_qr_code_base64(qr_data, visitor_info['name'])
             
-            qr_data = f"Name: {visitor_info['name']}\nDate: {visitor_info['date']}\nAccess Code: {random_code}\nExpires: {expiry_time.strftime('%Y-%m-%d %H:%M')}"
-            qr_image_b64, qr_file_path = generate_qr_code_base64(qr_data, visitor_info['name'])
-            logging.info(f"QR Code generated and saved at: {qr_file_path}")
-
-            # Send QR code to the user who requested it
             send_qr_code_to_visitor(wa_id, qr_image_b64)
             
+            # Notify admin of new code generation
+            notify_admin(
+                f"📄 New visitor pass generated\n"
+                f"Name: {visitor_info['name']}\n"
+                f"Date: {visitor_info['date']}\n"
+                f"Code: {random_code}\n"
+                f"Expires: {expiry_time.strftime('%Y-%m-%d %H:%M')}"
+            )
+            
             session_context.pop(wa_id, None)
-
+            
             return (
-                f"✅ Booking confirmed!\n\n"
-                f"Visitor Name: {visitor_info['name']}\n"
-                f"Visit Date: {visitor_info['date']}\n"
-                f"Access Code: {random_code}\n"
+                f"✅ Booking confirmed!\n"
+                f"Name: {visitor_info['name']}\n"
+                f"Date: {visitor_info['date']}\n"
+                f"Code: {random_code}\n"
                 f"Expires: {expiry_time.strftime('%Y-%m-%d %H:%M')}\n\n"
-                f"The QR code has been sent to you.\n"
-                f"This code will expire at midnight and can only be used once."
+                f"QR code sent. This code expires at midnight."
             )
         else:
-            return "❌ Incorrect PIN. Please try again or type 'RESET' to start over."
+            return "❌ Incorrect PIN. Try again or type 'RESET' to start over."
 
     else:
         session_context[wa_id] = {"step": "ask_name", "visitor_info": {}}
-        return "Let's start over. Please enter the visitor's name:"
+        return "Let's start over. Enter visitor name:"
 
 # Add a new endpoint to verify codes
 @app.route('/verify_code', methods=["POST"])
