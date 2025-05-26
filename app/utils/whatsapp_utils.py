@@ -202,6 +202,7 @@ def generate_response(message_body, wa_id=None, name=None):
         return "Resident information saved!\nNow, please enter visitor name:"
 
     elif step == "ask_visitor_name":
+        user_session["visitor_info"] = {}  # Reset visitor_info for new booking
         user_session["visitor_info"]["name"] = message_body
         user_session["step"] = "ask_date"
         return (
