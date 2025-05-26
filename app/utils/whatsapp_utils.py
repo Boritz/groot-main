@@ -105,6 +105,10 @@ def verify_code():
         }
     })
 
+def validate_pin(pin):
+    """Validate that PIN is 4 digits"""
+    return pin.isdigit() and len(pin) == 4
+
 def generate_response(message_body, wa_id=None, name=None):
     global session_context, user_pins, active_codes
 
