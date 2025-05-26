@@ -57,6 +57,29 @@ def webhook():
         process_whatsapp_message(body)
     return "ok", 200
 
+@app.route('/verify')
+def verify_qr():
+    return render_template("verify.html")
+
+def log_http_response(response):
+    logging.info(f"Status: {response.status_code}")
+    logging.info(f"Content-type: {response.headers.get('content-type')}")
+    logging.info(f"Body: {response.text}")
+
+def get_text_message_input(recipient, text):
+    return json.dumps({
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": recipient,
+        "type": "text",
+        "text": {"preview_url": False, "body": text},
+    })
+
+def generate_random_code(length=6):
+    """Generate a random alphanumeric code of specified length"""
+    characters = string.ascii_uppercase + string.digits
+    return ''.join(random.choice(characters) for _ in range(length))
+
 @app.route('/verify_code', methods=["POST"])
 def verify_code():
     """Endpoint for security to verify codes"""
