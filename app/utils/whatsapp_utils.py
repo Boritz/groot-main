@@ -343,32 +343,45 @@ def process_text_for_whatsapp(text):
 
 
 def process_whatsapp_message(body):
-    wa_id = body["entry"][0]["changes"][0]["value"]["contacts"][0]["wa_id"]
-    name = body["entry"][0]["changes"][0]["value"]["contacts"][0]["profile"]["name"]
-    message = body["entry"][0]["changes"][0]["value"]["messages"][0]
-    message_body = message["text"]["body"]
-
-    # Check if message is from admin
-    if wa_id == app.config["ADMIN_NUMBER"]:
-        # Admin is requesting to verify a code
-        if not message_body.strip().upper().startswith("VERIFY"):
-            response = "🔍 Admin: Please send 'VERIFY <code>' to check a visitor pass"
+    try:
+        wa_id = body["entry"][0]["changes"][0]["value"]["contacts"][0]["wa_id"]
+        name = body["entry"][0]["changes"][0]["value"]["contacts"][0]["profile"]["name"]
+        message = body["entry"][0]["changes"][0]["value"]["messages"][0]
+        
+        # Check if message contains text
+        if "text" in message:
+            message_body = message["text"]["body"]
+            
+            # Check if message is from admin
+            if wa_id == app.config["ADMIN_NUMBER"]:
+                # Admin verification logic
+                if not message_body.strip().upper().startswith("VERIFY"):
+                    response = "🔍 Admin: Please send 'VERIFY <code>' to check a visitor pass"
+                else:
+                    try:
+                        code = message_body.strip().upper().split()[1]
+                        verification = verify_code_admin(code)
+                        response = verification["message"]
+                    except IndexError:
+                        response = "❌ Invalid format. Please use: VERIFY <code>"
+            else:
+                # Normal user interaction
+                response = generate_response(message_body, wa_id, name)
         else:
-            # Extract code from message (format: "VERIFY ABC123")
-            try:
-                code = message_body.strip().upper().split()[1]
-                # Simulate a verify_code API call
-                verification = verify_code_admin(code)
-                response = verification["message"]
-            except IndexError:
-                response = "❌ Invalid format. Please use: VERIFY <code>"
-    else:
-        # Normal user interaction
-        response = generate_response(message_body, wa_id, name)
-
-    # Send response back to the sender
-    data = get_text_message_input(wa_id, response)
-    send_message(data)
+            # Handle non-text messages
+            response = "Please send text messages only for visitor registration."
+            
+        # Send response back to the sender
+        data = get_text_message_input(wa_id, response)
+        send_message(data)
+        
+    except Exception as e:
+        logging.error(f"Error processing WhatsApp message: {e}")
+        # Send error response if needed
+        if "wa_id" in locals():
+            error_msg = "Sorry, we encountered an error processing your request. Please try again."
+            data = get_text_message_input(wa_id, error_msg)
+            send_message(data)
 
 def verify_code_admin(code):
     """Special verification function for admin with more detailed responses"""
