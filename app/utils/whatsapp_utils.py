@@ -492,11 +492,75 @@ def process_whatsapp_message(body):
     message = body["entry"][0]["changes"][0]["value"]["messages"][0]
     message_body = message["text"]["body"]
 
-    response = generate_response(message_body, wa_id, name)
+    # Check if message is from admin
+    if wa_id == app.config["ADMIN_NUMBER"]:
+        # Admin is requesting to verify a code
+        if not message_body.strip().upper().startswith("VERIFY"):
+            response = "🔍 Admin: Please send 'VERIFY <code>' to check a visitor pass"
+        else:
+            # Extract code from message (format: "VERIFY ABC123")
+            try:
+                code = message_body.strip().upper().split()[1]
+                # Simulate a verify_code API call
+                verification = verify_code_admin(code)
+                response = verification["message"]
+            except IndexError:
+                response = "❌ Invalid format. Please use: VERIFY <code>"
+    else:
+        # Normal user interaction
+        response = generate_response(message_body, wa_id, name)
 
-    # ✅ FIX: Send response back to the sender (wa_id), not a fixed number
+    # Send response back to the sender
     data = get_text_message_input(wa_id, response)
     send_message(data)
+
+def verify_code_admin(code):
+    """Special verification function for admin with more detailed responses"""
+    if not code:
+        return {"valid": False, "message": "❌ No code provided"}
+    
+    if code not in active_codes:
+        return {"valid": False, "message": "❌ Invalid code: " + code}
+    
+    code_data = active_codes[code]
+    now = datetime.now()
+    
+    if code_data["used"]:
+        return {
+            "valid": False,
+            "message": (
+                f"⚠️ Code already used\n"
+                f"Visitor: {code_data['name']}\n"
+                f"Date: {code_data['date']}\n"
+                f"Verified at: {code_data['verified_at'] or 'N/A'}"
+            )
+        }
+    
+    if now > code_data["expiry"]:
+        return {
+            "valid": False,
+            "message": (
+                f"⌛ Code expired\n"
+                f"Visitor: {code_data['name']}\n"
+                f"Date: {code_data['date']}\n"
+                f"Expired at: {code_data['expiry'].strftime('%Y-%m-%d %H:%M')}"
+            )
+        }
+    
+    # Mark code as used and record verification time
+    active_codes[code]["used"] = True
+    active_codes[code]["verified_at"] = now.strftime("%Y-%m-%d %H:%M:%S")
+    
+    return {
+        "valid": True,
+        "message": (
+            f"✅ Access granted\n"
+            f"Visitor: {code_data['name']}\n"
+            f"Date: {code_data['date']}\n"
+            f"Code: {code}\n"
+            f"Expires: {code_data['expiry'].strftime('%Y-%m-%d %H:%M')}"
+        )
+    }
 
 
 def is_valid_whatsapp_message(body):
