@@ -25,10 +25,10 @@ def initialize_firestore():
         cred_dict = json.loads(os.environ['FIREBASE_CREDENTIALS'])
         cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred)
-                return firestore.client()
-            except Exception as e:
-                logging.error(f"Error initializing Firestore: {e}")
-                raise
+        return firestore.client()
+    except Exception as e:
+        logging.error(f"Error initializing Firestore: {e}")
+        raise
 
 db = initialize_firestore()
 
