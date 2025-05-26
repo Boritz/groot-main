@@ -169,11 +169,33 @@ def generate_response(message_body, wa_id=None, name=None):
         if message_body == user_pins.get(wa_id):
             user_session["step"] = "ask_name"
             session_context[wa_id] = user_session
-            return "PIN set successfully!\nPlease enter visitor name:"
+            return "PIN set successfully!\nPlease enter your name (for future reference):"
         else:
             return "PINs don't match. Please enter a new 4-digit PIN:"
 
     elif step == "ask_name":
+        user_session["visitor_info"]["resident_name"] = message_body
+        user_session["step"] = "ask_house_number"
+        session_context[wa_id] = user_session
+        return "Please enter your house number (for future reference):"
+
+    elif step == "ask_house_number":
+        if not message_body:
+            return "House number cannot be empty. Please enter your house number:"
+        user_session["visitor_info"]["house_number"] = message_body
+        user_session["step"] = "ask_street_name"
+        session_context[wa_id] = user_session
+        return "Please enter your street name (for future reference):"
+
+    elif step == "ask_street_name":
+        if not message_body:
+            return "Street name cannot be empty. Please enter your street name:"
+        user_session["visitor_info"]["street_name"] = message_body
+        user_session["step"] = "ask_visitor_name"
+        session_context[wa_id] = user_session
+        return "Now, please enter the visitor's name:"
+
+    elif step == "ask_visitor_name":
         user_session["visitor_info"]["name"] = message_body
         user_session["step"] = "ask_date"
         session_context[wa_id] = user_session
@@ -530,6 +552,8 @@ def verify_code_admin(code):
             "valid": False,
             "message": (
                 f"⚠️ Code already used\n"
+                f"Resident: {code_data['resident_name']}\n"
+                f"Address: {code_data['house_number']} {code_data['street_name']}\n"
                 f"Visitor: {code_data['name']}\n"
                 f"Date: {code_data['date']}\n"
                 f"Verified at: {code_data['verified_at'] or 'N/A'}"
@@ -541,6 +565,8 @@ def verify_code_admin(code):
             "valid": False,
             "message": (
                 f"⌛ Code expired\n"
+                f"Resident: {code_data['resident_name']}\n"
+                f"Address: {code_data['house_number']} {code_data['street_name']}\n"
                 f"Visitor: {code_data['name']}\n"
                 f"Date: {code_data['date']}\n"
                 f"Expired at: {code_data['expiry'].strftime('%Y-%m-%d %H:%M')}"
@@ -555,6 +581,8 @@ def verify_code_admin(code):
         "valid": True,
         "message": (
             f"✅ Access granted\n"
+            f"Resident: {code_data['resident_name']}\n"
+            f"Address: {code_data['house_number']} {code_data['street_name']}\n"
             f"Visitor: {code_data['name']}\n"
             f"Date: {code_data['date']}\n"
             f"Code: {code}\n"
