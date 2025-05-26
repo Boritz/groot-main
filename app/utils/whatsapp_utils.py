@@ -265,13 +265,13 @@ def generate_response(message_body, wa_id=None, name=None):
             send_qr_code_to_visitor(wa_id, qr_image_b64)
             
             # Notify admin of new code generation
-            notify_admin(
-                f"📄 New visitor pass generated\n"
-                f"Name: {visitor_info['name']}\n"
-                f"Date: {visitor_info['date']}\n"
-                f"Code: {random_code}\n"
-                f"Expires: {expiry_time.strftime('%Y-%m-%d %H:%M')}"
-            )
+            # notify_admin(
+            #     f"📄 New visitor pass generated\n"
+            #     f"Name: {visitor_info['name']}\n"
+            #     f"Date: {visitor_info['date']}\n"
+            #     f"Code: {random_code}\n"
+            #     f"Expires: {expiry_time.strftime('%Y-%m-%d %H:%M')}"
+            # )
             
             session_context.pop(wa_id, None)
             
@@ -309,181 +309,6 @@ def generate_qr_code_base64(data, visitor_name):
     img_str = base64.b64encode(buffered.getvalue()).decode()
 
     return img_str, file_path
-
-
-def send_existing_qr_image_to_visitor(visitor_wa_id, filename):
-    """
-    Send a previously saved QR code image file to the visitor's WhatsApp number.
-    """
-    file_path = os.path.join("qr_codes", filename)
-
-    if not os.path.exists(file_path):
-        logging.error(f"QR image file not found: {file_path}")
-        return
-
-    with open(file_path, "rb") as image_file:
-        image_data = image_file.read()
-
-    headers = {
-        "Authorization": f"Bearer {current_app.config['ACCESS_TOKEN']}"
-    }
-
-    upload_url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{current_app.config['PHONE_NUMBER_ID']}/media"
-    message_url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{current_app.config['PHONE_NUMBER_ID']}/messages"
-
-    # Upload image
-    files = {
-        'file': (filename, BytesIO(image_data), 'image/png'),
-        'messaging_product': (None, 'whatsapp'),
-    }
-
-    try:
-        upload_response = requests.post(upload_url, headers=headers, files=files)
-        logging.info(f"Media Upload Response: {upload_response.status_code} - {upload_response.text}")
-
-        if upload_response.status_code == 200:
-            media_id = upload_response.json().get("id")
-
-            message_data = {
-                "messaging_product": "whatsapp",
-                "to": visitor_wa_id,
-                "type": "image",
-                "image": {
-                    "id": media_id,
-                    "caption": "Your visitor QR code from Groot Estate Management."
-                }
-            }
-
-            response = requests.post(
-                message_url,
-                headers={**headers, "Content-Type": "application/json"},
-                json=message_data
-            )
-
-            logging.info(f"Image Message Send Response: {response.status_code} - {response.text}")
-        else:
-            logging.error("Failed to upload image.")
-    except Exception as e:
-        logging.error(f"Error sending existing QR code image: {e}")
-
-
-def send_qr_code_to_visitor(visitor_wa_id, qr_base64_image):
-    headers = {
-        "Authorization": f"Bearer {current_app.config['ACCESS_TOKEN']}"
-    }
-
-    url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{current_app.config['PHONE_NUMBER_ID']}/messages"
-    upload_url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{current_app.config['PHONE_NUMBER_ID']}/media"
-
-    files = {
-        'file': ('visitor_qr.png', BytesIO(base64.b64decode(qr_base64_image)), 'image/png'),
-        'messaging_product': (None, 'whatsapp')
-    }
-
-    try:
-        upload_response = requests.post(upload_url, headers=headers, files=files)
-        logging.info(f"Media Upload Response: {upload_response.status_code} - {upload_response.text}")
-
-        if upload_response.status_code == 200:
-            media_id = upload_response.json().get("id")
-            logging.info(f"Uploaded Media ID: {media_id}")
-
-            message_data = {
-                "messaging_product": "whatsapp",
-                "to": visitor_wa_id,
-                "type": "image",
-                "image": {
-                    "id": media_id,
-                    "caption": "Your visitor access QR code."
-                }
-            }
-
-            response = requests.post(url, headers={**headers, "Content-Type": "application/json"}, json=message_data)
-            logging.info(f"Send Message Response: {response.status_code} - {response.text}")
-        else:
-            logging.error("Image upload failed.")
-    except Exception as e:
-        logging.error(f"Error sending QR code: {e}")
-
-
-def send_pass_to_visitor(visitor_wa_id, _):
-    """
-    Temporary function to test message delivery to visitor's WhatsApp number.
-    Sends only a text message to confirm the number is reachable.
-    """
-    test_message = "Hello! This is a test message from Groot Estate Management. If you're seeing this, messaging works."
-
-    headers = {
-        "Content-type": "application/json",
-        "Authorization": f"Bearer {current_app.config['ACCESS_TOKEN']}",
-    }
-
-    url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{current_app.config['PHONE_NUMBER_ID']}/messages"
-
-    data = {
-        "messaging_product": "whatsapp",
-        "to": visitor_wa_id,
-        "type": "text",
-        "text": {
-            "body": test_message
-        }
-    }
-
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        logging.info(f"Test Text Message Response: {response.status_code} - {response.text}")
-    except Exception as e:
-        logging.error(f"Failed to send test message: {e}")
-
-
-def send_test_image_to_visitor(visitor_wa_id):
-    """
-    Send a static QR code image file from disk to the visitor to isolate media send issues.
-    """
-    filename = "Ola_20250524_080258.png"
-    file_path = os.path.join("qr_codes", filename)
-
-    if not os.path.exists(file_path):
-        logging.error(f"QR image file not found: {file_path}")
-        return
-
-    headers = {
-        "Authorization": f"Bearer {current_app.config['ACCESS_TOKEN']}"
-    }
-
-    # Upload image directly
-    with open(file_path, "rb") as f:
-        files = {
-            "file": (filename, f, "image/png"),
-            "messaging_product": (None, "whatsapp"),
-        }
-        upload_url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{current_app.config['PHONE_NUMBER_ID']}/media"
-        upload_response = requests.post(upload_url, headers=headers, files=files)
-
-    logging.info(f"Upload Status: {upload_response.status_code}")
-    logging.info(f"Upload Response: {upload_response.text}")
-
-    if upload_response.status_code == 200:
-        media_id = upload_response.json().get("id")
-
-        message_data = {
-            "messaging_product": "whatsapp",
-            "to": visitor_wa_id,
-            "type": "image",
-            "image": {
-                "id": media_id,
-                "caption": "Test QR code from Groot Estate Management"
-            }
-        }
-
-        message_url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{current_app.config['PHONE_NUMBER_ID']}/messages"
-        response = requests.post(message_url, headers={**headers, "Content-Type": "application/json"},
-                                 json=message_data)
-
-        logging.info(f"Send Media Message Status: {response.status_code}")
-        logging.info(f"Send Media Message Response: {response.text}")
-    else:
-        logging.error("Image upload failed.")
 
 
 def send_message(data):
