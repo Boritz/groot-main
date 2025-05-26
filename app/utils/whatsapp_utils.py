@@ -20,6 +20,7 @@ app.config["ADMIN_NUMBER"] = os.getenv("ADMIN_NUMBER")  # Admin's WhatsApp numbe
 # In-memory storage (replace with database in production)
 user_pins = {}
 active_codes = {}  # {code: {wa_id, name, date, expiry, used, verified_at}}
+resident_info = {}
 
 # In-memory session (replace with Redis/db in prod)
 session_context = {}
@@ -190,10 +191,14 @@ def generate_response(message_body, wa_id=None, name=None):
     elif step == "ask_street_name":
         if not message_body:
             return "Street name cannot be empty. Please enter your street name:"
-        user_session["visitor_info"]["street_name"] = message_body
+        # Save resident info permanently
+        resident_info[wa_id] = {
+            "name": user_session["resident_info"]["name"],
+            "house_number": user_session["resident_info"]["house_number"],
+            "street_name": message_body
+        }
         user_session["step"] = "ask_visitor_name"
-        session_context[wa_id] = user_session
-        return "Now, please enter the visitor's name:"
+        return "Resident information saved!\nNow, please enter visitor name:"
 
     elif step == "ask_visitor_name":
         user_session["visitor_info"]["name"] = message_body
@@ -545,6 +550,7 @@ def verify_code_admin(code):
         return {"valid": False, "message": "❌ Invalid code: " + code}
     
     code_data = active_codes[code]
+    resident_data = resident_info.get(code_data["wa_id"], {})
     now = datetime.now()
     
     if code_data["used"]:
@@ -552,8 +558,8 @@ def verify_code_admin(code):
             "valid": False,
             "message": (
                 f"⚠️ Code already used\n"
-                f"Resident: {code_data['resident_name']}\n"
-                f"Address: {code_data['house_number']} {code_data['street_name']}\n"
+                f"Resident: {resident_data.get('name', 'N/A')}\n"
+                f"Address: {resident_data.get('house_number', '')} {resident_data.get('street_name', '')}\n"
                 f"Visitor: {code_data['name']}\n"
                 f"Date: {code_data['date']}\n"
                 f"Verified at: {code_data['verified_at'] or 'N/A'}"
@@ -565,8 +571,8 @@ def verify_code_admin(code):
             "valid": False,
             "message": (
                 f"⌛ Code expired\n"
-                f"Resident: {code_data['resident_name']}\n"
-                f"Address: {code_data['house_number']} {code_data['street_name']}\n"
+                f"Resident: {resident_data.get('name', 'N/A')}\n"
+                f"Address: {resident_data.get('house_number', '')} {resident_data.get('street_name', '')}\n"
                 f"Visitor: {code_data['name']}\n"
                 f"Date: {code_data['date']}\n"
                 f"Expired at: {code_data['expiry'].strftime('%Y-%m-%d %H:%M')}"
@@ -581,8 +587,8 @@ def verify_code_admin(code):
         "valid": True,
         "message": (
             f"✅ Access granted\n"
-            f"Resident: {code_data['resident_name']}\n"
-            f"Address: {code_data['house_number']} {code_data['street_name']}\n"
+            f"Resident: {resident_data.get('name', 'N/A')}\n"
+            f"Address: {resident_data.get('house_number', '')} {resident_data.get('street_name', '')}\n"
             f"Visitor: {code_data['name']}\n"
             f"Date: {code_data['date']}\n"
             f"Code: {code}\n"
