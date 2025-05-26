@@ -10,6 +10,9 @@ def create_app():
     load_configurations(app)
     configure_logging()
 
+    # Firebase settings (optional: load from env)
+    app.config["FIREBASE_CREDENTIALS_PATH"] = os.getenv("FIREBASE_CREDENTIALS_PATH", "firebase_key.json")
+
     # Import and register blueprints, if any
     app.register_blueprint(webhook_blueprint)
 
