@@ -262,17 +262,7 @@ def generate_response(message_body, wa_id=None, name=None):
             qr_data = f"Groot Estate Pass\nName: {visitor_info['name']}\nDate: {visitor_info['date']}\nCode: {random_code}\nExpires: {expiry_time.strftime('%Y-%m-%d %H:%M')}"
             qr_image_b64, _ = generate_qr_code_base64(qr_data, visitor_info['name'])
             
-            send_qr_code_to_visitor(wa_id, qr_image_b64)
-            
-            # Notify admin of new code generation
-            # notify_admin(
-            #     f"📄 New visitor pass generated\n"
-            #     f"Name: {visitor_info['name']}\n"
-            #     f"Date: {visitor_info['date']}\n"
-            #     f"Code: {random_code}\n"
-            #     f"Expires: {expiry_time.strftime('%Y-%m-%d %H:%M')}"
-            # )
-            
+                        
             session_context.pop(wa_id, None)
             
             return (
