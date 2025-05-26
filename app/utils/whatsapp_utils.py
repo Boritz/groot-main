@@ -19,25 +19,16 @@ app.config["VERSION"] = "v22.0"
 app.config["PHONE_NUMBER_ID"] = os.getenv("PHONE_NUMBER_ID")
 app.config["ADMIN_NUMBER"] = os.getenv("ADMIN_NUMBER")  # Admin's WhatsApp number
 
-import firebase_admin
-from firebase_admin import credentials, firestore
-
 # Initialize Firestore (add this near the top of your file)
 def initialize_firestore():
     try:
-        # For production, use environment variables
-        cred = credentials.Certificate({
-            "type": "service_account",
-            "project_id": os.getenv("FIREBASE_PROJECT_ID"),
-            "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace('\\n', '\n'),
-            "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
-            "token_uri": "https://oauth2.googleapis.com/token",
-        })
+        cred_dict = json.loads(os.environ['FIREBASE_CREDENTIALS'])
+        cred = credentials.Certificate(cred_dict)
         firebase_admin.initialize_app(cred)
-        return firestore.client()
-    except Exception as e:
-        logging.error(f"Error initializing Firestore: {e}")
-        raise
+                return firestore.client()
+            except Exception as e:
+                logging.error(f"Error initializing Firestore: {e}")
+                raise
 
 db = initialize_firestore()
 
