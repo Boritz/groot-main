@@ -134,7 +134,7 @@ def validate_pin(pin):
     return pin.isdigit() and len(pin) == 4
 
 def generate_response(message_body, wa_id=None, name=None):
-    global session_context, user_pins, active_codes
+    global session_context, user_pins, active_codes, resident_info
 
     # Clean up expired codes first
     current_time = datetime.now()
