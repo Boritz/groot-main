@@ -227,7 +227,7 @@ def generate_response(message_body, wa_id=None, name=None):
         if resident:
             # Returning user - start fresh with visitor name
             user_session = {
-                "step": "ask_visitor_name", 
+                "step": "expect_greeting", 
                 "visitor_info": {},
                 "resident_info": {
                     "pin": resident.get("pin")  # hashed PIN from Firestore
@@ -249,6 +249,15 @@ def generate_response(message_body, wa_id=None, name=None):
     message_body = message_body.strip()
     step = user_session["step"]
 
+    if step == "expect_greeting":
+        # Check for common greetings
+        if message_body.lower() in ["hi", "hello", "hey", "hola"]:
+            user_session["step"] = "ask_visitor_name"
+            update_session(wa_id, user_session)
+            return "Great! Please enter visitor name:"
+        else:
+            return "Please say hello to continue with your booking."
+    
     if step == "set_pin":
         if validate_pin(message_body):
             user_session["pin"] = message_body
@@ -388,7 +397,7 @@ def generate_response(message_body, wa_id=None, name=None):
             
             # Reset session for next booking
             new_session = {
-                "step": "ask_visitor_name",
+                "step": "expect_greeting",
                 "visitor_info": {},
                 "is_returning_user": True
             }
