@@ -539,44 +539,60 @@ def process_whatsapp_message(body):
             send_message(data)
 
 def verify_code_admin(code):
+    """Admin verification endpoint for WhatsApp messages"""
     try:
-        # 1. Get document
-        doc_ref = db.collection("codes").document(str(code))  # Ensure string
+        # 1. Get document from the correct collection
+        doc_ref = db.collection(CODES_COLLECTION).document(str(code).strip().upper())
         doc = doc_ref.get()
         
         if not doc.exists:
-            return "❌ Invalid code"
+            return {"status": "error", "message": "❌ Invalid code"}
         
         data = doc.to_dict()
         
-        # 2. Validate structure
-        required_fields = ["used", "expiry", "wa_id", "name"]
+        # 2. Validate document structure
+        required_fields = ["used", "expiry", "name"]
         if not all(field in data for field in required_fields):
-            return "⚠️ Corrupted code record"
+            return {"status": "error", "message": "⚠️ Corrupted code record"}
             
-        # 3. Check status
-        if data["used"]:
-            return "⌛ Code already used"
+        # 3. Check code status
+        if data.get("used", False):
+            return {"status": "error", "message": "⌛ Code already used"}
             
         # 4. Check expiry (handle both datetime and Firestore Timestamp)
         expiry = data["expiry"]
         if hasattr(expiry, "timestamp"):  # Firestore Timestamp
             expiry = expiry.to_pydatetime()
         if expiry < datetime.now():
-            return "⌛ Code expired"
+            return {"status": "error", "message": "⌛ Code expired"}
             
         # 5. Mark as used
-        doc_ref.update({
+        update_data = {
             "used": True,
             "verified_at": datetime.now(),
             "verified_by": "admin"
-        })
+        }
+        doc_ref.update(update_data)
         
-        return f"✅ Verified: {data['name']} (Resident: {data.get('resident_name', 'unknown')})"
+        # Get resident info if available
+        resident_name = "unknown"
+        if "wa_id" in data:
+            resident = get_resident(data["wa_id"])
+            if resident:
+                resident_name = resident.get("name", "unknown")
+        
+        return {
+            "status": "success",
+            "message": f"✅ Verified: {data['name']}\nResident: {resident_name}",
+            "visitor": data["name"],
+            "resident": resident_name,
+            "date": data.get("date", ""),
+            "code": code
+        }
         
     except Exception as e:
-        print(f"ERROR in verify_code_admin: {str(e)}")
-        return "⚠️ Server error - please try again"
+        logging.error(f"Admin verification error: {str(e)}", exc_info=True)
+        return {"status": "error", "message": "⚠️ Server error - please try again"}
 
 
 def is_valid_whatsapp_message(body):
