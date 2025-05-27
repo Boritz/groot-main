@@ -353,13 +353,13 @@ def generate_response(message_body, wa_id=None, name=None):
             # user_session.pop(wa_id, None)
             # delete_session(wa_id)
             
-            # # Reset session for next booking
-            # new_session = {
-            #     "step": "ask_visitor_name",
-            #     "visitor_info": {},
-            #     "is_returning_user": True
-            # }
-            # update_session(wa_id, new_session)
+            # Reset session for next booking
+            new_session = {
+                "step": "ask_visitor_name",
+                "visitor_info": {},
+                "is_returning_user": True
+            }
+            update_session(wa_id, new_session)
             
             return (
                 f"✅ Booking confirmed!\n"
