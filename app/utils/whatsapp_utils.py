@@ -560,7 +560,7 @@ def verify_code_admin(code):
         code = code.strip().upper()
         
         # 1. Get document from Firestore
-        doc_ref = db.collection("active_codes").document(code)  # Changed collection name
+        doc_ref = db.collection("active_codes").document(code)
         doc = doc_ref.get()
         
         if not doc.exists:
@@ -612,16 +612,19 @@ def verify_code_admin(code):
         }
         doc_ref.update(update_data)
         
-        # 7. Format success response
+        # 7. Format success response - using double newlines instead of \n
+        message_lines = [
+            "✅ *Access Granted*",
+            "",
+            f"Visitor: {data['name']}",
+            f"Resident: {resident_name}",
+            f"Date: {data.get('date', 'N/A')}",
+            f"Code: {code}"
+        ]
+        
         return {
             "status": "success",
-            "message": (
-                f"✅ *Access Granted*\n\n"
-                f"Visitor: {data['name']}\n"
-                f"Resident: {resident_name}\n"
-                f"Date: {data.get('date', 'N/A')}\n"
-                f"Code: {code}"
-            ),
+            "message": "\n".join(message_lines),  # Join with newline character
             "visitor": data["name"],
             "resident": resident_name,
             "date": data.get("date", ""),
@@ -631,7 +634,6 @@ def verify_code_admin(code):
     except Exception as e:
         logging.error(f"Admin verification failed: {str(e)}", exc_info=True)
         return {"status": "error", "message": "⚠️ Server error - please try again"}
-
 
 def is_valid_whatsapp_message(body):
     return (
