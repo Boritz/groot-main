@@ -351,7 +351,7 @@ def generate_response(message_body, wa_id=None, name=None):
             db.collection("bookings").add(booking_data)
             
             # user_session.pop(wa_id, None)
-            delete_session(wa_id)
+            # delete_session(wa_id)
             
             # # Reset session for next booking
             # new_session = {
