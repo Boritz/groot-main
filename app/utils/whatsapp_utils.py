@@ -256,6 +256,7 @@ def generate_response(message_body, wa_id=None, name=None):
             "house_number": user_session["resident_info"]["house_number"],
             "street_name": message_body,
             "wa_id": wa_id,
+            "pin": user_session["resident_info"]["pin"],
             "created_at": datetime.now()
         }
         update_resident(wa_id, resident_data)
@@ -305,7 +306,7 @@ def generate_response(message_body, wa_id=None, name=None):
         return "Enter your 4-digit PIN to confirm booking:"
 
     elif step == "verify_pin":
-        if message_body == user_session.get("pin"):
+        if message_body == user_session["resident_info"]["pin"]:
             visitor_info = user_session["visitor_info"]
             random_code = generate_random_code()
             expiry_time = datetime.combine(
@@ -326,15 +327,15 @@ def generate_response(message_body, wa_id=None, name=None):
             
             qr_data = f"Groot Estate Pass\nName: {visitor_info['name']}\nDate: {visitor_info['date']}\nCode: {random_code}\nExpires: {expiry_time.strftime('%Y-%m-%d %H:%M')}"
             qr_image_b64, _ = generate_qr_code_base64(qr_data, visitor_info['name'])
-            delete_session(wa_id)
+            user_session.pop(wa_id, None)
             
-            # Reset session for next booking
-            new_session = {
-                "step": "ask_visitor_name",
-                "visitor_info": {},
-                "is_returning_user": True
-            }
-            update_session(wa_id, new_session)
+            # # Reset session for next booking
+            # new_session = {
+            #     "step": "ask_visitor_name",
+            #     "visitor_info": {},
+            #     "is_returning_user": True
+            # }
+            # update_session(wa_id, new_session)
             
             return (
                 f"✅ Booking confirmed!\n"
