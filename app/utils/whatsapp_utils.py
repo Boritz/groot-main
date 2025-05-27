@@ -560,7 +560,7 @@ def verify_code_admin(code):
         code = code.strip().upper()
         
         # 1. Get document from Firestore
-        doc_ref = db.collection(CODES_COLLECTION).document(code)
+        doc_ref = db.collection("active_codes").document(code)
         doc = doc_ref.get()
         
         if not doc.exists:
