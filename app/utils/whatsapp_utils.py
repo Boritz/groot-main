@@ -335,6 +335,7 @@ def generate_response(message_body, wa_id=None, name=None):
             
             qr_data = f"Groot Estate Pass\nName: {visitor_info['name']}\nDate: {visitor_info['date']}\nCode: {random_code}\nExpires: {expiry_time.strftime('%Y-%m-%d %H:%M')}"
             qr_image_b64, _ = generate_qr_code_base64(qr_data, visitor_info['name'])
+            user_session.pop(wa_id, None)
             
             # Reset session for next booking
             new_session = {
