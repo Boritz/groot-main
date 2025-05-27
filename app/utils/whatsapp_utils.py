@@ -205,6 +205,9 @@ def generate_response(message_body, wa_id=None, name=None):
             user_session = {
                 "step": "ask_visitor_name", 
                 "visitor_info": {},
+                "resident_info": {
+                    "pin": resident.get("pin")  # hashed PIN from Firestore
+                },
                 "is_returning_user": True
             }
             update_session(wa_id, user_session)
@@ -332,6 +335,20 @@ def generate_response(message_body, wa_id=None, name=None):
             
             qr_data = f"Groot Estate Pass\nName: {visitor_info['name']}\nDate: {visitor_info['date']}\nCode: {random_code}\nExpires: {expiry_time.strftime('%Y-%m-%d %H:%M')}"
             qr_image_b64, _ = generate_qr_code_base64(qr_data, visitor_info['name'])
+
+            # Save booking to Firestore
+            booking_data = {
+                "wa_id": wa_id,
+                "visitor_name": visitor_info["name"],
+                "date": visitor_info["date"],
+                "code": random_code,
+                "expiry": expiry_time,
+                "created_at": datetime.now(),
+                # Optional
+                "qr_base64": qr_image_b64
+            }
+            db.collection("bookings").add(booking_data)
+            
             # user_session.pop(wa_id, None)
             delete_session(wa_id)
             
@@ -362,7 +379,19 @@ def generate_response(message_body, wa_id=None, name=None):
         }
         update_session(wa_id, new_session)
         return "Let's start over. Please enter visitor name:"
-    
+
+
+
+
+def get_recent_bookings(wa_id):
+    two_months_ago = datetime.now() - timedelta(days=60)
+    bookings_ref = db.collection("bookings") \
+        .where("wa_id", "==", wa_id) \
+        .where("created_at", ">=", two_months_ago)
+
+    return [doc.to_dict() for doc in bookings_ref.stream()]
+
+
 def generate_qr_code_base64(data, visitor_name):
     save_dir = 'qr_codes'
     os.makedirs(save_dir, exist_ok=True)
