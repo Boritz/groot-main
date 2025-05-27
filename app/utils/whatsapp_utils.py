@@ -539,60 +539,44 @@ def process_whatsapp_message(body):
             send_message(data)
 
 def verify_code_admin(code):
-    """Special verification function for admin with more detailed responses"""
-    if not code:
-        return {"valid": False, "message": "❌ No code provided"}
-    
-    code_data = get_code(code)
-    if not code_data:
-        return {"valid": False, "message": "❌ Invalid code: " + code}
-    
-    resident_data = get_resident(code_data["wa_id"]) or {}
-    now = datetime.now()
-    
-    if code_data["used"]:
-        return {
-            "valid": False,
-            "message": (
-                f"⚠️ Code already used\n"
-                f"Resident: {resident_data.get('name', 'N/A')}\n"
-                f"Address: {resident_data.get('house_number', '')} {resident_data.get('street_name', '')}\n"
-                f"Visitor: {code_data['name']}\n"
-                f"Date: {code_data['date']}\n"
-                f"Verified at: {code_data['verified_at'] or 'N/A'}"
-            )
-        }
-    
-    if now > code_data["expiry"]:
-        return {
-            "valid": False,
-            "message": (
-                f"⌛ Code expired\n"
-                f"Resident: {resident_data.get('name', 'N/A')}\n"
-                f"Address: {resident_data.get('house_number', '')} {resident_data.get('street_name', '')}\n"
-                f"Visitor: {code_data['name']}\n"
-                f"Date: {code_data['date']}\n"
-                f"Expired at: {code_data['expiry'].strftime('%Y-%m-%d %H:%M')}"
-            )
-        }
-    
-    # Mark code as used and record verification time
-    code_data["used"] = True
-    code_data["verified_at"] = now.strftime("%Y-%m-%d %H:%M:%S")
-    update_code(code, code_data)
-    
-    return {
-        "valid": True,
-        "message": (
-            f"✅ Access granted\n"
-            f"Resident: {resident_data.get('name', 'N/A')}\n"
-            f"Address: {resident_data.get('house_number', '')} {resident_data.get('street_name', '')}\n"
-            f"Visitor: {code_data['name']}\n"
-            f"Date: {code_data['date']}\n"
-            f"Code: {code}\n"
-            f"Expires: {code_data['expiry'].strftime('%Y-%m-%d %H:%M')}"
-        )
-    }
+    try:
+        # 1. Get document
+        doc_ref = db.collection("codes").document(str(code))  # Ensure string
+        doc = doc_ref.get()
+        
+        if not doc.exists:
+            return "❌ Invalid code"
+        
+        data = doc.to_dict()
+        
+        # 2. Validate structure
+        required_fields = ["used", "expiry", "wa_id", "name"]
+        if not all(field in data for field in required_fields):
+            return "⚠️ Corrupted code record"
+            
+        # 3. Check status
+        if data["used"]:
+            return "⌛ Code already used"
+            
+        # 4. Check expiry (handle both datetime and Firestore Timestamp)
+        expiry = data["expiry"]
+        if hasattr(expiry, "timestamp"):  # Firestore Timestamp
+            expiry = expiry.to_pydatetime()
+        if expiry < datetime.now():
+            return "⌛ Code expired"
+            
+        # 5. Mark as used
+        doc_ref.update({
+            "used": True,
+            "verified_at": datetime.now(),
+            "verified_by": "admin"
+        })
+        
+        return f"✅ Verified: {data['name']} (Resident: {data.get('resident_name', 'unknown')})"
+        
+    except Exception as e:
+        print(f"ERROR in verify_code_admin: {str(e)}")
+        return "⚠️ Server error - please try again"
 
 
 def is_valid_whatsapp_message(body):
