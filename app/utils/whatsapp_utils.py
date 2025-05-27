@@ -552,8 +552,14 @@ def process_whatsapp_message(body):
 def verify_code_admin(code):
     """Admin verification endpoint for WhatsApp messages"""
     try:
-        # 1. Get document from the correct collection
-        doc_ref = db.collection(CODES_COLLECTION).document(str(code).strip().upper())
+        if not code or not isinstance(code, str):
+            return {"status": "error", "message": "❌ No code provided"}
+
+        # Normalize code format
+        code = code.strip().upper()
+        
+        # 1. Get document from Firestore
+        doc_ref = db.collection(CODES_COLLECTION).document(code)
         doc = doc_ref.get()
         
         if not doc.exists:
@@ -562,39 +568,47 @@ def verify_code_admin(code):
         data = doc.to_dict()
         
         # 2. Validate document structure
-        required_fields = ["used", "expiry", "name"]
-        if not all(field in data for field in required_fields):
-            return {"status": "error", "message": "⚠️ Corrupted code record"}
-            
-        # 3. Check code status
-        if data.get("used", False):
-            return {"status": "error", "message": "⌛ Code already used"}
-            
-        # 4. Check expiry (handle both datetime and Firestore Timestamp)
+        required_fields = ["used", "expiry", "name", "wa_id"]
+        for field in required_fields:
+            if field not in data:
+                logging.error(f"Missing field in code document: {field}")
+                return {"status": "error", "message": "⚠️ Corrupted code record"}
+        
+        # 3. Convert Firestore timestamp if needed
         expiry = data["expiry"]
         if hasattr(expiry, "timestamp"):  # Firestore Timestamp
             expiry = expiry.to_pydatetime()
+        
+        # 4. Check code status
+        if data["used"]:
+            return {"status": "error", "message": "⌛ Code already used"}
+            
         if expiry < datetime.now():
             return {"status": "error", "message": "⌛ Code expired"}
             
-        # 5. Mark as used
+        # 5. Get resident info
+        resident = get_resident(data["wa_id"])
+        resident_name = resident.get("name", "unknown") if resident else "unknown"
+        
+        # 6. Update code status
         update_data = {
             "used": True,
             "verified_at": datetime.now(),
-            "verified_by": "admin"
+            "verified_by": "admin",
+            "verified_resident": resident_name
         }
         doc_ref.update(update_data)
         
-        # Get resident info if available
-        resident_name = "unknown"
-        if "wa_id" in data:
-            resident = get_resident(data["wa_id"])
-            if resident:
-                resident_name = resident.get("name", "unknown")
-        
+        # 7. Format success response
         return {
             "status": "success",
-            "message": f"✅ Verified: {data['name']}\nResident: {resident_name}",
+            "message": (
+                f"✅ *Access Granted*\n\n"
+                f"Visitor: {data['name']}\n"
+                f"Resident: {resident_name}\n"
+                f"Date: {data.get('date', 'N/A')}\n"
+                f"Code: {code}"
+            ),
             "visitor": data["name"],
             "resident": resident_name,
             "date": data.get("date", ""),
@@ -602,7 +616,7 @@ def verify_code_admin(code):
         }
         
     except Exception as e:
-        logging.error(f"Admin verification error: {str(e)}", exc_info=True)
+        logging.error(f"Admin verification failed: {str(e)}", exc_info=True)
         return {"status": "error", "message": "⚠️ Server error - please try again"}
 
 
