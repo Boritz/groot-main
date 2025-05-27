@@ -417,7 +417,7 @@ def generate_response(message_body, wa_id=None, name=None):
                     f"Date: {visitor_info['date']}\n"
                     f"Code: {random_code}\n"
                     f"Expires: {expiry_time.strftime('%Y-%m-%d %H:%M')}\n\n"
-                    f"QR code sent. This code expires at midnight."
+                    f"Here's your booking details. Forward to your guest to grant access. This code expires at midnight."
                 )
         else:
             # Compare plain text PIN (fallback for testing)
