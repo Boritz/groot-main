@@ -515,8 +515,19 @@ def process_whatsapp_message(body):
                 else:
                     try:
                         code = message_body.strip().upper().split()[1]
+                        
                         verification = verify_code_admin(code)
-                        response = verification["message"]
+                        if verification["status"] == "success":
+                            # Format success message nicely
+                            response = (
+                                f"🚪 *Access Verification*\n\n"
+                                f"Visitor: {verification['visitor']}\n"
+                                f"Resident: {verification['resident']}\n"
+                                f"Status: {verification['message'].split('\n')[0]}"
+                            )
+                        else:
+                            response = verification["message"]
+                    
                     except IndexError:
                         response = "❌ Invalid format. Please use: VERIFY <code>"
             else:
