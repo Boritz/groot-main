@@ -13,6 +13,7 @@ import string
 from flask import Flask, request, jsonify, render_template, current_app
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1.base_document import DocumentSnapshot
 
 app = Flask(__name__)
 app.config["ACCESS_TOKEN"] = os.getenv("ACCESS_TOKEN")
@@ -575,9 +576,12 @@ def verify_code_admin(code):
                 return {"status": "error", "message": "⚠️ Corrupted code record"}
         
         # 3. Convert Firestore timestamp if needed
-        expiry = data["expiry"]
-        if hasattr(expiry, "timestamp"):  # Firestore Timestamp
+        if isinstance(expiry, str):
+            expiry = datetime.strptime(expiry, "%Y-%m-%d %H:%M:%S")
+        elif hasattr(expiry, "to_pydatetime"):
             expiry = expiry.to_pydatetime()
+        elif not isinstance(expiry, datetime):
+            raise ValueError("Invalid expiry format")
         
         # 4. Check code status
         if data["used"]:
