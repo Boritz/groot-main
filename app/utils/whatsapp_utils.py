@@ -211,8 +211,17 @@ def verify_code():
     })
 
 def validate_pin(pin):
-    """Validate that PIN is 4 digits"""
-    return pin.isdigit() and len(pin) == 4
+    """Validate PIN with additional checks"""
+    if not (pin.isdigit() and len(pin) == 4):
+        return False
+    
+    # Optional: Prevent simple PINs like '0000' or '1234'
+    if len(set(pin)) == 1:  # All digits same
+        return False
+    if pin in ['1234', '4321', '1111', '0000']:
+        return False
+    
+    return True
 
 def generate_response(message_body, wa_id=None, name=None):
     # Clean up expired codes first
