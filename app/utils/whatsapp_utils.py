@@ -314,7 +314,8 @@ def generate_response(message_body, wa_id=None, name=None):
         return "Enter your 4-digit PIN to confirm booking:"
 
     elif step == "verify_pin":
-        if message_body == user_session["resident_info"]["pin"]:
+        hashed_pin = user_session.get("resident_info", {}).get("pin")
+        if hashed_pin and bcrypt.checkpw(message_body.encode('utf-8'), hashed_pin.encode('utf-8')):
             visitor_info = user_session["visitor_info"]
             random_code = generate_random_code()
             expiry_time = datetime.combine(
