@@ -5,6 +5,7 @@ import re
 import qrcode
 from io import BytesIO
 import os
+import bcrypt
 from datetime import datetime, timedelta
 import base64
 import random
@@ -74,6 +75,10 @@ def get_expired_codes():
         .where("expiry", "<=", now) \
         .stream()
     return [code.id for code in expired_codes]
+
+
+def hash_pin(pin):
+    return bcrypt.hashpw(pin.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def notify_admin(message):
@@ -229,7 +234,7 @@ def generate_response(message_body, wa_id=None, name=None):
         if message_body == user_session.get("pin"):
             if user_session.get("is_new_user"):
                 user_session["step"] = "ask_resident_name"
-                user_session["resident_info"] = {}
+                user_session["resident_info"] = {"pin": user_session["pin"]}
                 update_session(wa_id, user_session)
                 return "PIN set successfully!\nPlease enter your name (resident):"
             else:
@@ -256,7 +261,7 @@ def generate_response(message_body, wa_id=None, name=None):
             "house_number": user_session["resident_info"]["house_number"],
             "street_name": message_body,
             "wa_id": wa_id,
-            "pin": user_session["resident_info"]["pin"],
+            "pin": hash_pin(user_session["resident_info"]["pin"]),
             "created_at": datetime.now()
         }
         update_resident(wa_id, resident_data)
@@ -327,7 +332,8 @@ def generate_response(message_body, wa_id=None, name=None):
             
             qr_data = f"Groot Estate Pass\nName: {visitor_info['name']}\nDate: {visitor_info['date']}\nCode: {random_code}\nExpires: {expiry_time.strftime('%Y-%m-%d %H:%M')}"
             qr_image_b64, _ = generate_qr_code_base64(qr_data, visitor_info['name'])
-            user_session.pop(wa_id, None)
+            # user_session.pop(wa_id, None)
+            delete_session(wa_id}
             
             # # Reset session for next booking
             # new_session = {
