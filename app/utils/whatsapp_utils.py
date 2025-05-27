@@ -75,15 +75,6 @@ def get_expired_codes():
         .stream()
     return [code.id for code in expired_codes]
 
-# # In-memory storage (replace with database in production)
-# user_pins = {}
-# active_codes = {}  # {code: {wa_id, name, date, expiry, used, verified_at}}
-# resident_info = {}
-
-# # In-memory session (replace with Redis/db in prod)
-# session_context = {}
-
-
 
 def notify_admin(message):
     """Send notification to admin WhatsApp number"""
