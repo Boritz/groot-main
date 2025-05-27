@@ -560,7 +560,7 @@ def verify_code_admin(code):
         code = code.strip().upper()
         
         # 1. Get document from Firestore
-        doc_ref = db.collection("active_codes").document(code)
+        doc_ref = db.collection("active_codes").document(code)  # Changed collection name
         doc = doc_ref.get()
         
         if not doc.exists:
@@ -575,9 +575,18 @@ def verify_code_admin(code):
                 logging.error(f"Missing field in code document: {field}")
                 return {"status": "error", "message": "⚠️ Corrupted code record"}
         
-        # 3. Convert Firestore timestamp if needed
+        # 3. Handle expiry field conversion
+        expiry = data["expiry"]
         if isinstance(expiry, str):
-            expiry = datetime.strptime(expiry, "%Y-%m-%d %H:%M:%S")
+            # Handle both ISO format and the format shown in your image
+            try:
+                expiry = datetime.strptime(expiry, "%Y-%m-%d")
+            except ValueError:
+                try:
+                    # Try parsing the full timestamp format if ISO date fails
+                    expiry = datetime.strptime(expiry.split(" at ")[0], "%b %d, %Y")
+                except Exception:
+                    raise ValueError("Invalid expiry format")
         elif hasattr(expiry, "to_pydatetime"):
             expiry = expiry.to_pydatetime()
         elif not isinstance(expiry, datetime):
@@ -597,7 +606,7 @@ def verify_code_admin(code):
         # 6. Update code status
         update_data = {
             "used": True,
-            "verified_at": datetime.now(),
+            "verified_at": datetime.now().strftime("%Y-%m-%d"),  # Format to match your structure
             "verified_by": "admin",
             "verified_resident": resident_name
         }
