@@ -132,6 +132,30 @@ def get_text_message_input(recipient, text):
         "text": {"preview_url": False, "body": text},
     })
 
+def get_resident_data(wa_id):
+    """
+    Fetch resident data from Firestore using WhatsApp ID (wa_id)
+    Returns:
+        - Resident data as dict if found
+        - None if not found
+    """
+    try:
+        # Query residents collection where wa_id matches
+        residents_ref = db.collection("residents")
+        query = residents_ref.where("wa_id", "==", wa_id).limit(1)
+        docs = query.stream()
+        
+        # Extract the first matching document
+        for doc in docs:
+            resident_data = doc.to_dict()
+            return resident_data
+        
+        return None  # No resident found
+    
+    except Exception as e:
+        print(f"Error fetching resident data: {e}")
+        return None
+
 def generate_random_code(length=6):
     """Generate a random alphanumeric code of specified length"""
     characters = string.ascii_uppercase + string.digits
@@ -241,6 +265,15 @@ def generate_response(message_body, wa_id=None, name=None):
                 update_session(wa_id, user_session)
                 return "PIN set successfully!\nPlease enter your name (resident):"
             else:
+                # For returning users, load resident info from database
+                resident_data = get_resident_data(wa_id)  # You need to implement this
+                if resident_data:
+                    user_session["resident_info"] = {
+                        "name": resident_data["name"],
+                        "house_number": resident_data["house_number"],
+                        "street_name": resident_data["street_name"],
+                        "pin": resident_data["pin"]
+                    }
                 user_session["step"] = "ask_visitor_name"
                 update_session(wa_id, user_session)
                 return "PIN verified!\nPlease enter visitor name:"
