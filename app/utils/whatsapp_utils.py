@@ -132,7 +132,7 @@ def get_text_message_input(recipient, text):
         "text": {"preview_url": False, "body": text},
     })
 
-def get_resident_data(wa_id):
+def get_resident(wa_id):
     """
     Fetch resident data from Firestore using WhatsApp ID (wa_id)
     Returns:
