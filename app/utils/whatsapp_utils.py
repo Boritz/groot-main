@@ -272,7 +272,7 @@ def generate_response(message_body, wa_id=None, name=None):
             user_session["step"] = "confirm_pin"
             update_session(wa_id, user_session)
             return "Please confirm your 4-digit PIN:"
-        return "Invalid PIN. Please enter exactly 4 digits."
+        return "Invalid PIN. Please enter a more secure PIN exactly 4 digits."
 
     elif step == "confirm_pin":
         if message_body == user_session.get("pin"):
