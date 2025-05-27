@@ -294,7 +294,7 @@ def generate_response(message_body, wa_id=None, name=None):
                 user_session["step"] = "ask_visitor_name"
                 update_session(wa_id, user_session)
                 return "PIN verified!\nPlease enter visitor name:"
-        return "PINs don't match. Please enter a new 4-digit PIN:
+        return "PINs don't match. Please enter a new 4-digit PIN:"
 
     elif step == "ask_resident_name":
         user_session["resident_info"] = {"name": message_body}
