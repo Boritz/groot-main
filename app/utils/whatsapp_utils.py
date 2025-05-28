@@ -13,7 +13,6 @@ import string
 from flask import Flask, request, jsonify, render_template, current_app
 import firebase_admin
 from firebase_admin import credentials, firestore
-from google.cloud.firestore_v1.base_document import DocumentSnapshot
 
 app = Flask(__name__)
 app.config["ACCESS_TOKEN"] = os.getenv("ACCESS_TOKEN")
@@ -516,19 +515,8 @@ def process_whatsapp_message(body):
                 else:
                     try:
                         code = message_body.strip().upper().split()[1]
-                        
                         verification = verify_code_admin(code)
-                        if verification["status"] == "success":
-                            # Format success message nicely
-                            response = (
-                                f"🚪 *Access Verification*\n\n"
-                                f"Visitor: {verification['visitor']}\n"
-                                f"Resident: {verification['resident']}\n"
-                                f"Status: {verification['message'].split('\n')[0]}"
-                            )
-                        else:
-                            response = verification["message"]
-                    
+                        response = verification["message"]
                     except IndexError:
                         response = "❌ Invalid format. Please use: VERIFY <code>"
             else:
@@ -551,89 +539,45 @@ def process_whatsapp_message(body):
             send_message(data)
 
 def verify_code_admin(code):
-    """Admin verification endpoint for WhatsApp messages"""
     try:
-        if not code or not isinstance(code, str):
-            return {"status": "error", "message": "❌ No code provided"}
-
-        # Normalize code format
-        code = code.strip().upper()
-        
-        # 1. Get document from Firestore
-        doc_ref = db.collection("active_codes").document(code)
+        # 1. Get document
+        doc_ref = db.collection("codes").document(str(code))  # Ensure string
         doc = doc_ref.get()
         
         if not doc.exists:
-            return {"status": "error", "message": "❌ Invalid code"}
+            return "❌ Invalid code"
         
         data = doc.to_dict()
         
-        # 2. Validate document structure
-        required_fields = ["used", "expiry", "name", "wa_id"]
-        for field in required_fields:
-            if field not in data:
-                logging.error(f"Missing field in code document: {field}")
-                return {"status": "error", "message": "⚠️ Corrupted code record"}
-        
-        # 3. Handle expiry field conversion
-        expiry = data["expiry"]
-        if isinstance(expiry, str):
-            # Handle both ISO format and the format shown in your image
-            try:
-                expiry = datetime.strptime(expiry, "%Y-%m-%d")
-            except ValueError:
-                try:
-                    # Try parsing the full timestamp format if ISO date fails
-                    expiry = datetime.strptime(expiry.split(" at ")[0], "%b %d, %Y")
-                except Exception:
-                    raise ValueError("Invalid expiry format")
-        elif hasattr(expiry, "to_pydatetime"):
-            expiry = expiry.to_pydatetime()
-        elif not isinstance(expiry, datetime):
-            raise ValueError("Invalid expiry format")
-        
-        # 4. Check code status
+        # 2. Validate structure
+        required_fields = ["used", "expiry", "wa_id", "name"]
+        if not all(field in data for field in required_fields):
+            return "⚠️ Corrupted code record"
+            
+        # 3. Check status
         if data["used"]:
-            return {"status": "error", "message": "⌛ Code already used"}
+            return "⌛ Code already used"
             
+        # 4. Check expiry (handle both datetime and Firestore Timestamp)
+        expiry = data["expiry"]
+        if hasattr(expiry, "timestamp"):  # Firestore Timestamp
+            expiry = expiry.to_pydatetime()
         if expiry < datetime.now():
-            return {"status": "error", "message": "⌛ Code expired"}
+            return "⌛ Code expired"
             
-        # 5. Get resident info
-        resident = get_resident(data["wa_id"])
-        resident_name = resident.get("name", "unknown") if resident else "unknown"
-        
-        # 6. Update code status
-        update_data = {
+        # 5. Mark as used
+        doc_ref.update({
             "used": True,
-            "verified_at": datetime.now().strftime("%Y-%m-%d"),  # Format to match your structure
-            "verified_by": "admin",
-            "verified_resident": resident_name
-        }
-        doc_ref.update(update_data)
+            "verified_at": datetime.now(),
+            "verified_by": "admin"
+        })
         
-        # 7. Format success response - using double newlines instead of \n
-        message_lines = [
-            "✅ *Access Granted*",
-            "",
-            f"Visitor: {data['name']}",
-            f"Resident: {resident_name}",
-            f"Date: {data.get('date', 'N/A')}",
-            f"Code: {code}"
-        ]
-        
-        return {
-            "status": "success",
-            "message": "\n".join(message_lines),  # Join with newline character
-            "visitor": data["name"],
-            "resident": resident_name,
-            "date": data.get("date", ""),
-            "code": code
-        }
+        return f"✅ Verified: {data['name']} (Resident: {data.get('resident_name', 'unknown')})"
         
     except Exception as e:
-        logging.error(f"Admin verification failed: {str(e)}", exc_info=True)
-        return {"status": "error", "message": "⚠️ Server error - please try again"}
+        print(f"ERROR in verify_code_admin: {str(e)}")
+        return "⚠️ Server error - please try again"
+
 
 def is_valid_whatsapp_message(body):
     return (
