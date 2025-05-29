@@ -10,9 +10,13 @@ from datetime import datetime, timedelta
 import base64
 import random
 import string
+import traceback
 from flask import Flask, request, jsonify, render_template, current_app
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1 import DocumentSnapshot
+from google.protobuf.timestamp_pb2 import Timestamp
+
 
 app = Flask(__name__)
 app.config["ACCESS_TOKEN"] = os.getenv("ACCESS_TOKEN")
@@ -563,8 +567,11 @@ def verify_code_admin(code):
 
         # Convert expiry to datetime if necessary
         expiry = data["expiry"]
-        if hasattr(expiry, "to_pydatetime"):
+        if hasattr(expiry, "to_pydatetime"):  # Firestore Timestamp
             expiry = expiry.to_pydatetime()
+        elif not isinstance(expiry, datetime):
+            logging.error(f"Unexpected expiry type: {type(expiry)}")
+            return {"valid": False, "message": "⚠️ Corrupted expiry data"}
 
         if expiry < datetime.now():
             return {"valid": False, "message": "⌛ Code expired"}
@@ -586,6 +593,7 @@ def verify_code_admin(code):
 
     except Exception as e:
         logging.error(f"ERROR in verify_code_admin: {str(e)}")
+        logging.error(traceback.format_exc())
         return {"valid": False, "message": "⚠️ Server error - please try again"}
 
 
