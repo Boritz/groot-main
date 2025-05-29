@@ -378,8 +378,9 @@ def generate_response(message_body, wa_id=None, name=None):
                 # PIN verification successful
                 visitor_info = user_session["visitor_info"]
                 random_code = generate_random_code()
+                selected_date = datetime.strptime(visitor_info["date"], "%Y-%m-%d").date()
                 expiry_time = datetime.combine(
-                    datetime.now().date() + timedelta(days=1),
+                    selected_date + timedelta(days=1),
                     datetime.min.time()
                 )
                 
