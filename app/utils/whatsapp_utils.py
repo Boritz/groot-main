@@ -6,7 +6,7 @@ import qrcode
 from io import BytesIO
 import os
 import bcrypt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import base64
 import random
 import string
@@ -573,7 +573,7 @@ def verify_code_admin(code):
             logging.error(f"Unexpected expiry type: {type(expiry)}")
             return {"valid": False, "message": "⚠️ Corrupted expiry data"}
 
-        if expiry < datetime.now():
+            if expiry < datetime.now(timezone.utc):
             return {"valid": False, "message": "⌛ Code expired"}
 
         # Mark code as used
