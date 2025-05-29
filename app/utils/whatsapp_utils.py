@@ -392,6 +392,9 @@ def generate_response(message_body, wa_id=None, name=None):
                     "used": False,
                     "verified_at": None,
                     "created_at": datetime.now()
+                    "resident_name": user_session["resident_info"].get("name", "Unknown"),
+                    "house_number": user_session["resident_info"].get("house_number", ""),
+                    "street_name": user_session["resident_info"].get("street_name", "")
                 }
                 update_code(random_code, code_data)
                 
