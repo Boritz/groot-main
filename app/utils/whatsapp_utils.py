@@ -433,7 +433,7 @@ def generate_response(message_body, wa_id=None, name=None):
                 # ... [same success flow as above]
                 pass
                 
-        return "❌ Incorrect PIN. Try again or type 'RESET' to start over."
+        return "❌ Incorrect PIN. Try again or contact the facility manager for a reset."
 
     else:
         # Fallback for unexpected states
@@ -444,8 +444,6 @@ def generate_response(message_body, wa_id=None, name=None):
         }
         update_session(wa_id, new_session)
         return "Let's start over. Please enter visitor name:"
-
-
 
 
 def get_recent_bookings(wa_id):
@@ -569,7 +567,7 @@ def verify_code_admin(code):
         if data["used"]:
             return {"valid": False, "message": "⌛ Code already used"}
 
-        # Convert expiry to datetime if necessary
+        # Convert expiry to datetime
         expiry = data["expiry"]
         if hasattr(expiry, "to_pydatetime"):  # Firestore Timestamp
             expiry = expiry.to_pydatetime()
@@ -579,6 +577,19 @@ def verify_code_admin(code):
 
         if expiry < datetime.now(timezone.utc):
             return {"valid": False, "message": "⌛ Code expired"}
+
+        # Check if today matches the visit date
+        today = datetime.now(timezone.utc).date()
+        try:
+            visit_date = datetime.strptime(data["date"], "%Y-%m-%d").date()
+        except ValueError:
+            return {"valid": False, "message": "⚠️ Invalid date format in code"}
+        
+        if today != visit_date:
+            return {
+                "valid": False,
+                "message": f"❌ Code is only valid on {visit_date.strftime('%Y-%m-%d')}"
+            }
 
         # Mark code as used
         doc_ref.update({
