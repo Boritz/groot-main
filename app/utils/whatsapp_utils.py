@@ -290,7 +290,7 @@ def generate_response(message_body, wa_id=None, name=None):
                 resident = get_resident(wa_id)
                 if resident:
                     user_session["resident_info"] = {
-                        "name": resident.get("name"),
+                        "resident_name": resident.get("resident_name"),
                         "house_number": resident.get("house_number"),
                         "street_name": resident.get("street_name"),
                         "pin": resident.get("pin")  # Already hashed in DB
@@ -301,7 +301,7 @@ def generate_response(message_body, wa_id=None, name=None):
         return "PINs don't match. Please enter a new 4-digit PIN:"
 
     elif step == "ask_resident_name":
-        user_session["resident_info"] = {"name": message_body}
+        user_session["resident_info"] = {"resident_name": message_body}
         user_session["step"] = "ask_house_number"
         update_session(wa_id, user_session)
         return "Please enter your house number:"
@@ -314,7 +314,7 @@ def generate_response(message_body, wa_id=None, name=None):
 
     elif step == "ask_street_name":
         resident_data = {
-            "name": user_session["resident_info"]["name"],
+            "resident_name": user_session["resident_info"]["resident_name"],
             "house_number": user_session["resident_info"]["house_number"],
             "street_name": message_body,
             "wa_id": wa_id,
@@ -392,7 +392,7 @@ def generate_response(message_body, wa_id=None, name=None):
                     "used": False,
                     "verified_at": None,
                     "created_at": datetime.now(),
-                    "resident_name": user_session["resident_info"].get("name", "Unknown"),
+                    "resident_name": user_session["resident_info"].get("resident_name", "Unknown"),
                     "house_number": user_session["resident_info"].get("house_number", ""),
                     "street_name": user_session["resident_info"].get("street_name", "")
                 }
@@ -601,7 +601,7 @@ def verify_code_admin(code):
             "verified_by": "admin"
         })
 
-        resident = data.get("name", "Unknown")
+        resident = data.get("resident_name", "Unknown")
         house = data.get("house_number", "")
         street = data.get("street_name", "")
         address = f"{house} {street}".strip()
