@@ -313,6 +313,7 @@ def generate_response(message_body, wa_id=None, name=None):
         return "Please enter your street name:"
 
     elif step == "ask_street_name":
+        user_session["resident_info"]["street_name"] = message_body
         resident_data = {
             "resident_name": user_session["resident_info"]["resident_name"],
             "house_number": user_session["resident_info"]["house_number"],
