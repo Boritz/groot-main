@@ -583,13 +583,22 @@ def verify_code_admin(code):
             "verified_by": "admin"
         })
 
-        # Include resident name if available
-        resident_name = data.get("resident_name", "unknown")
+        resident = data.get("name", "Unknown")
+        house = data.get("house_number", "")
+        street = data.get("street_name", "")
+        address = f"{house}, {street}".strip()
 
-        return {
-            "valid": True,
-            "message": f"✅ Verified: {data['name']} (Resident: {resident_name})"
-        }
+        message = (
+            "✅ Access granted\n"
+            f"Resident: {resident}\n"
+            f"Address: {address}\n"
+            f"Visitor: {data['name']}\n"
+            f"Date: {data['date']}\n"
+            f"Code: {code}\n"
+            f"Expires: {expiry.strftime('%Y-%m-%d %H:%M')}"
+        )
+
+        return {"valid": True, "message": message}
 
     except Exception as e:
         logging.error(f"ERROR in verify_code_admin: {str(e)}")
