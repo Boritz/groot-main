@@ -604,7 +604,7 @@ def verify_code_admin(code):
         resident = data.get("name", "Unknown")
         house = data.get("house_number", "")
         street = data.get("street_name", "")
-        address = f"{house}, {street}".strip()
+        address = f"{house} {street}".strip()
 
         message = (
             "✅ Access granted\n"
