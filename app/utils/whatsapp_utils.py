@@ -540,43 +540,53 @@ def process_whatsapp_message(body):
 
 def verify_code_admin(code):
     try:
-        # 1. Get document
-        doc_ref = db.collection("codes").document(str(code))  # Ensure string
+        # Ensure code is string
+        code = str(code).strip().upper()
+
+        # Use the consistent collection name
+        doc_ref = db.collection(CODES_COLLECTION).document(code)
         doc = doc_ref.get()
-        
+
         if not doc.exists:
-            return "❌ Invalid code"
-        
+            return {"valid": False, "message": "❌ Invalid code"}
+
         data = doc.to_dict()
-        
-        # 2. Validate structure
+
+        # Ensure required fields exist
         required_fields = ["used", "expiry", "wa_id", "name"]
         if not all(field in data for field in required_fields):
-            return "⚠️ Corrupted code record"
-            
-        # 3. Check status
+            return {"valid": False, "message": "⚠️ Corrupted code record"}
+
+        # Check if code was already used
         if data["used"]:
-            return "⌛ Code already used"
-            
-        # 4. Check expiry (handle both datetime and Firestore Timestamp)
+            return {"valid": False, "message": "⌛ Code already used"}
+
+        # Convert expiry to datetime if necessary
         expiry = data["expiry"]
-        if hasattr(expiry, "timestamp"):  # Firestore Timestamp
+        if hasattr(expiry, "to_pydatetime"):
             expiry = expiry.to_pydatetime()
+
         if expiry < datetime.now():
-            return "⌛ Code expired"
-            
-        # 5. Mark as used
+            return {"valid": False, "message": "⌛ Code expired"}
+
+        # Mark code as used
         doc_ref.update({
             "used": True,
             "verified_at": datetime.now(),
             "verified_by": "admin"
         })
-        
-        return f"✅ Verified: {data['name']} (Resident: {data.get('resident_name', 'unknown')})"
-        
+
+        # Include resident name if available
+        resident_name = data.get("resident_name", "unknown")
+
+        return {
+            "valid": True,
+            "message": f"✅ Verified: {data['name']} (Resident: {resident_name})"
+        }
+
     except Exception as e:
-        print(f"ERROR in verify_code_admin: {str(e)}")
-        return "⚠️ Server error - please try again"
+        logging.error(f"ERROR in verify_code_admin: {str(e)}")
+        return {"valid": False, "message": "⚠️ Server error - please try again"}
 
 
 def is_valid_whatsapp_message(body):
