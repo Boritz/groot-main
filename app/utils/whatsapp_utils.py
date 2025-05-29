@@ -573,7 +573,7 @@ def verify_code_admin(code):
             logging.error(f"Unexpected expiry type: {type(expiry)}")
             return {"valid": False, "message": "⚠️ Corrupted expiry data"}
 
-            if expiry < datetime.now(timezone.utc):
+        if expiry < datetime.now(timezone.utc):
             return {"valid": False, "message": "⌛ Code expired"}
 
         # Mark code as used
