@@ -575,16 +575,19 @@ def verify_code_admin(code):
             logging.error(f"Unexpected expiry type: {type(expiry)}")
             return {"valid": False, "message": "⚠️ Corrupted expiry data"}
 
-        if expiry < datetime.now(timezone.utc):
+        now = datetime.now(timezone.utc)
+
+        # Check expiry
+        if expiry < now:
             return {"valid": False, "message": "⌛ Code expired"}
 
-        # Check if today matches the visit date
-        today = datetime.now(timezone.utc).date()
+        # Check if today is the visit date
+        today = now.date()
         try:
             visit_date = datetime.strptime(data["date"], "%Y-%m-%d").date()
         except ValueError:
-            return {"valid": False, "message": "⚠️ Invalid date format in code"}
-        
+            return {"valid": False, "message": "⚠️ Invalid visit date format"}
+
         if today != visit_date:
             return {
                 "valid": False,
